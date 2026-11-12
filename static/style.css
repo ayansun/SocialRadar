@@ -1,0 +1,1037 @@
+/* SocialRadar — a radar operator's console.
+
+   Rules of this stylesheet:
+   - Every surface, border and text colour comes from one graphite ramp.
+   - One accent, the "signal" green. It appears only where the radar found
+     something: the keyword inside a post, and the dot next to anything
+     that is new, unread or active.
+   - Spacing sits on a 4px grid. Two type families: Plex Sans for the
+     interface, Plex Mono for figures and meta. */
+
+:root {
+  color-scheme: dark;
+
+  /* Graphite ramp */
+  --deep: #0f0f10; /* sidebar */
+  --bg: #141415; /* page */
+  --card: #19191b;
+  --raised: #232325; /* active row, buttons, tags */
+  --hairline: rgba(237, 237, 237, 0.08);
+  --hairline-strong: rgba(237, 237, 237, 0.14);
+
+  /* Three text roles */
+  --text: #ededed;
+  --text-2: #a1a1a6;
+  --muted: #85858b;
+
+  --raised-hover: #2b2b2e;
+  --primary-hover: #ffffff;
+
+  /* The one accent, plus a toned-down red for errors */
+  --signal: #46d08f; /* dots and the pipeline bar */
+  --signal-text: #46d08f; /* keyword found in a post */
+  --signal-wash: rgba(70, 208, 143, 0.14);
+  --negative: #e5484d;
+
+  /* Neutral steps of the pipeline bar */
+  --step-1: rgba(237, 237, 237, 0.62);
+  --step-2: rgba(237, 237, 237, 0.34);
+  --step-3: rgba(237, 237, 237, 0.14);
+
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Light theme: the same roles with light values. The <html> element gets
+   data-theme="light" or "dark" from the script in index.html / app.js,
+   and every rule below uses the variables, so nothing else has to change. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --deep: #f4f4f5;
+  --bg: #fafafa;
+  --card: #ffffff;
+  --raised: #f4f4f5;
+  --hairline: rgba(23, 23, 23, 0.08);
+  --hairline-strong: rgba(23, 23, 23, 0.16);
+
+  --text: #171717;
+  --text-2: #525252;
+  --muted: #737373;
+
+  --raised-hover: #e9e9eb;
+  --primary-hover: #000000;
+
+  --signal: #16a34a;
+  --signal-text: #0b6e3c;
+  --signal-wash: rgba(22, 163, 74, 0.14);
+  --negative: #dc2626;
+
+  --step-1: rgba(23, 23, 23, 0.55);
+  --step-2: rgba(23, 23, 23, 0.3);
+  --step-3: rgba(23, 23, 23, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+a {
+  color: inherit;
+}
+
+/* ---------- App frame ---------- */
+
+.app {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.content {
+  min-width: 0;
+  max-width: 1440px;
+  padding: 32px 32px 64px;
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 16px 12px;
+  background: var(--deep);
+  border-right: 1px solid var(--hairline);
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Theme switch: shows a sun in the dark theme and a moon in the light one. */
+.theme-toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: none;
+  color: var(--text-2);
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.theme-toggle .icon-moon,
+:root[data-theme="light"] .theme-toggle .icon-sun {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-toggle .icon-moon {
+  display: block;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.brand-mark .solid {
+  fill: currentColor;
+  stroke: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 24px;
+}
+
+.site-nav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text-2);
+  text-decoration: none;
+  transition: background-color 140ms var(--ease), color 140ms var(--ease);
+}
+
+.site-nav a:hover {
+  color: var(--text);
+}
+
+.site-nav a[aria-current="page"] {
+  background: var(--raised);
+  box-shadow: inset 0 1px 0 var(--hairline);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.site-nav svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-count {
+  margin-left: auto;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.sidebar-foot {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--hairline);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sidebar-foot a {
+  color: var(--text-2);
+  text-underline-offset: 3px;
+}
+
+.sidebar-foot a:hover {
+  color: var(--text);
+}
+
+/* ---------- Text ---------- */
+
+.page-head {
+  margin-bottom: 24px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 500;
+}
+
+.page-head p {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+
+h2 {
+  margin: 32px 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.two-columns > div > h2:first-child,
+.panel h2 {
+  margin-top: 0;
+}
+
+h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+h2 + .hint {
+  margin: -8px 0 12px;
+}
+
+.optional {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* Figures and meta: platform, time, counts, keywords. */
+.meta,
+.tag,
+.time,
+.number {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta,
+.time {
+  color: var(--muted);
+}
+
+/* ---------- Layout ---------- */
+
+.two-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.side {
+  display: grid;
+  gap: 12px;
+}
+
+.panel,
+.list,
+.toolbar,
+.table-wrap,
+.state,
+.stats div {
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+}
+
+.panel {
+  padding: 20px;
+}
+
+#view-notifications .toolbar,
+#notification-list {
+  max-width: 800px;
+}
+
+/* ---------- Notice (result of the last action) ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--raised);
+}
+
+.notice::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.notice.error {
+  color: var(--negative);
+}
+
+.notice.error::before {
+  background: var(--negative);
+}
+
+/* ---------- Loading / empty / error states ---------- */
+
+.state {
+  margin: 0;
+  padding: 32px 20px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.state span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.state.error {
+  color: var(--negative);
+}
+
+.state a {
+  color: var(--text);
+  text-underline-offset: 3px;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 140ms var(--ease), border-color 140ms var(--ease),
+    transform 140ms var(--ease);
+}
+
+button:hover {
+  border-color: var(--hairline-strong);
+  background: var(--raised-hover);
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+/* Primary action: off-white from the ramp, so the accent stays rare. */
+button.primary {
+  height: 36px;
+  padding: 0 16px;
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+button.primary:hover {
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
+}
+
+button.danger-armed,
+button.danger-armed:hover {
+  border-color: var(--negative);
+  background: var(--negative);
+  color: var(--deep);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* ---------- Forms ---------- */
+
+form label,
+.field label,
+legend {
+  display: block;
+  margin: 16px 0 4px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+form > label:first-child {
+  margin-top: 0;
+}
+
+input[type="text"],
+input[type="url"],
+textarea,
+select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+input[type="text"],
+input[type="url"],
+select {
+  height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+textarea {
+  display: block;
+  resize: vertical;
+}
+
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--text);
+}
+
+fieldset {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  margin: 0;
+  padding: 0;
+}
+
+form label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 16px 0 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+form > label.check {
+  margin-top: 16px;
+}
+
+.form-error {
+  margin: 16px 0 0;
+  color: var(--negative);
+  font-size: 13px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.panel > button {
+  margin-top: 12px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 16px;
+}
+
+.toolbar .field {
+  flex: 1 1 140px;
+}
+
+.toolbar .field label {
+  margin-top: 0;
+}
+
+/* ---------- Dashboard ---------- */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stats div {
+  padding: 16px 20px 20px;
+}
+
+.stats dt {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.stats dd {
+  margin: 8px 0 0;
+  font-family: var(--mono);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lead pipeline: one stacked bar. Only "new" gets the accent,
+   the other statuses are neutral steps of the ramp. */
+
+.pipeline {
+  margin-top: 12px;
+}
+
+.pipeline-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pipeline-head h2 {
+  margin: 0;
+}
+
+.pipeline-bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  margin: 16px 0;
+}
+
+.pipeline-bar span {
+  min-width: 4px;
+  border-radius: 2px;
+}
+
+.pipeline-bar span:first-child {
+  border-radius: 6px 2px 2px 6px;
+}
+
+.pipeline-bar span:last-child {
+  border-radius: 2px 6px 6px 2px;
+}
+
+.pipeline-bar span:only-child {
+  border-radius: 6px;
+}
+
+.seg-new {
+  background: var(--signal);
+}
+
+.seg-saved {
+  background: var(--step-1);
+}
+
+.seg-contacted {
+  background: var(--step-2);
+}
+
+.seg-dismissed {
+  background: var(--step-3);
+}
+
+.pipeline-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.pipeline-legend dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.pipeline-legend dt i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.pipeline-legend dd {
+  margin: 4px 0 0 16px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Lists (trackers, leads, notifications) ---------- */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li {
+  padding: 16px 20px;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.row-head .status {
+  margin-left: auto;
+}
+
+.author {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* Status with the signal dot. The dot is green only for things that are
+   live or waiting for the user: new leads, unread notifications,
+   active trackers. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-new,
+.status-unread,
+.status-active {
+  color: var(--text);
+}
+
+.status-new::before,
+.status-unread::before,
+.status-active::before {
+  background: var(--signal);
+}
+
+.status-dismissed,
+.status-paused,
+.status-read {
+  color: var(--muted);
+}
+
+.status-dismissed::before,
+.status-paused::before,
+.status-read::before {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.tag-excluded {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.tag-demo {
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  color: var(--muted);
+}
+
+.post-text {
+  margin: 8px 0;
+  font-size: 15px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+/* The moment of the product: the keyword the radar picked up. */
+mark {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--signal-wash);
+  color: var(--signal-text);
+}
+
+.match-line {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.match-line .meta {
+  margin-left: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.actions a {
+  margin-left: auto;
+  color: var(--text-2);
+  font-size: 13px;
+  text-underline-offset: 3px;
+  transition: color 140ms var(--ease);
+}
+
+.actions a:hover {
+  color: var(--text);
+}
+
+/* Without buttons (dashboard) the link sits right under the match line. */
+.actions-bare {
+  margin-top: 4px;
+}
+
+.actions-bare a {
+  margin-left: 0;
+}
+
+.lead-dismissed .post-text {
+  color: var(--muted);
+}
+
+/* Tracker rows */
+
+.tracker-paused h3 {
+  color: var(--text-2);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 12px 0 0;
+}
+
+.details dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.details dd {
+  margin: 0;
+}
+
+/* Notifications */
+
+.notification-message {
+  margin: 8px 0 0;
+}
+
+.notification:not(.unread) .notification-message {
+  color: var(--text-2);
+}
+
+.notification blockquote {
+  margin: 8px 0 0;
+  padding-left: 12px;
+  border-left: 1px solid var(--hairline-strong);
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Posts table ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 12px 20px 12px 0;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: top;
+}
+
+th:first-child,
+td:first-child {
+  padding-left: 20px;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+td.text-cell {
+  min-width: 260px;
+  color: var(--text-2);
+}
+
+td.number,
+th.number {
+  text-align: right;
+}
+
+td.number {
+  color: var(--text);
+}
+
+td:last-child {
+  padding: 8px 20px 8px 0;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------- Medium screens: forms move under the list ---------- */
+
+@media (max-width: 1080px) {
+  .two-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stats,
+  .pipeline-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Small screens: sidebar becomes a top bar ---------- */
+
+@media (max-width: 760px) {
+  .app {
+    display: block;
+  }
+
+  .sidebar {
+    z-index: 5;
+    height: auto;
+    padding: 12px 8px 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .site-nav {
+    flex-direction: row;
+    gap: 4px;
+    margin-top: 8px;
+    overflow-x: auto;
+  }
+
+  .site-nav a {
+    flex: none;
+    padding: 0 12px;
+  }
+
+  .site-nav svg,
+  .sidebar-foot {
+    display: none;
+  }
+
+  .nav-count {
+    margin-left: 0;
+  }
+
+  .content {
+    padding: 20px 16px 48px;
+  }
+
+  h1 {
+    font-size: 24px;
+    line-height: 28px;
+  }
+
+  .list > li,
+  .panel {
+    padding: 16px;
+  }
+
+  .actions a {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
