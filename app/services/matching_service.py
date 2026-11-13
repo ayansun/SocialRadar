@@ -1,11 +1,3 @@
-"""Keyword matching engine.
-
-This is the only place that decides whether a post matches a tracker and the
-only place that creates or removes Match records. Keeping it in one file
-guarantees the same rules are used when a post is added and when a tracker
-is created or edited.
-"""
-
 from app.schemas.common import LeadStatus, normalize_text
 from app.services import notification_service
 from app.storage import now, storage
