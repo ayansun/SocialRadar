@@ -1,13 +1,3 @@
-"""In-memory storage.
-
-All application data lives in plain Python dictionaries inside one
-`InMemoryStorage` object. Nothing is written to disk, so the data is lost
-when the server restarts. Services are the only code that should touch it.
-
-When a real database is added later, only this file and the services that
-use it need to change.
-"""
-
 from datetime import datetime, timezone
 
 
