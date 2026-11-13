@@ -23,7 +23,6 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-# --- helpers used by several test files ------------------------------------
 
 
 def tracker_payload(**overrides) -> dict:
