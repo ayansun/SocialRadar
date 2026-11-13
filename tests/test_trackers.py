@@ -20,7 +20,6 @@ def test_create_tracker_normalizes_keywords(client):
         client, keywords=["  Нужен   Сайт ", "нужен сайт", "Website Developer"]
     )
 
-    # lowercase, single spaces, duplicates removed
     assert tracker["keywords"] == ["нужен сайт", "website developer"]
 
 
@@ -77,7 +76,6 @@ def test_create_tracker_with_keyword_that_is_also_excluded(client):
 def test_create_tracker_with_duplicate_name(client):
     create_tracker(client)
 
-    # Names are compared without regard to case.
     response = client.post("/api/trackers", json=tracker_payload(name="website leads"))
 
     assert response.status_code == 409
@@ -175,7 +173,6 @@ def test_delete_tracker_removes_its_matches_and_notifications(client):
 
     client.delete(f"/api/trackers/{tracker['id']}")
 
-    # Only the data of the other tracker is left; the post itself stays.
     matches = client.get("/api/matches").json()
     notifications = client.get("/api/notifications").json()
     assert [m["tracker_id"] for m in matches] == [other["id"]]
