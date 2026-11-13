@@ -29,5 +29,4 @@ def now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# The single shared storage instance used by the whole application.
 storage = InMemoryStorage()
