@@ -7,7 +7,6 @@ class InMemoryStorage:
 
     def reset(self) -> None:
         """Remove all data. Used by the tests to start from a clean state."""
-        # Each dictionary maps an integer id to a record (a plain dict).
         self.trackers: dict[int, dict] = {}
         self.posts: dict[int, dict] = {}
         self.matches: dict[int, dict] = {}
