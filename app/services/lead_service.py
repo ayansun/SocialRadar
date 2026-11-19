@@ -4,10 +4,14 @@ Every match is a potential client (a lead) with a status. This service
 lists leads and controls how their status is allowed to change.
 """
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.errors import ConflictError, NotFoundError
+from app.models import Match, Post, Tracker
+from app.models.mixins import utcnow
 from app.schemas.common import LeadStatus, Platform
 from app.services.common import post_view
-from app.storage import now, storage
 
 # Which statuses a lead can move to from each status.
 # Note: dismissed -> contacted is not allowed. A dismissed lead must be
@@ -20,26 +24,31 @@ ALLOWED_TRANSITIONS: dict[str, list[str]] = {
 }
 
 
-def to_response(match: dict) -> dict:
-    """Add tracker name, post and allowed next statuses to a match record."""
-    tracker = storage.trackers[match["tracker_id"]]
-    post = storage.posts[match["post_id"]]
+def to_response(db: Session, match: Match) -> dict:
+    """Add tracker name, post and allowed next statuses to a match."""
     return {
-        **match,
-        "tracker_name": tracker["name"],
-        "post": post_view(post),
-        "allowed_statuses": ALLOWED_TRANSITIONS[match["status"]],
+        "id": match.id,
+        "tracker_id": match.tracker_id,
+        "tracker_name": match.tracker.name,
+        "post_id": match.post_id,
+        "post": post_view(db, match.post),
+        "matched_keywords": match.matched_keywords,
+        "status": match.status,
+        "allowed_statuses": ALLOWED_TRANSITIONS[match.status],
+        "created_at": match.created_at,
+        "updated_at": match.updated_at,
     }
 
 
-def _get(match_id: int) -> dict:
-    match = storage.matches.get(match_id)
+def _get(db: Session, match_id: int) -> Match:
+    match = db.get(Match, match_id)
     if match is None:
         raise NotFoundError("Match not found")
     return match
 
 
 def list_matches(
+    db: Session,
     platform: Platform | None = None,
     tracker_id: int | None = None,
     status: LeadStatus | None = None,
@@ -47,44 +56,48 @@ def list_matches(
     limit: int | None = None,
 ) -> list[dict]:
     """Newest first, with optional filters."""
-    if tracker_id is not None and tracker_id not in storage.trackers:
+    if tracker_id is not None and db.get(Tracker, tracker_id) is None:
         raise NotFoundError("Tracker not found")
 
-    needle = search.lower().strip() if search else None
-    result = []
-    for match in sorted(storage.matches.values(), key=lambda m: m["id"], reverse=True):
-        post = storage.posts[match["post_id"]]
-        if platform is not None and post["platform"] != platform.value:
-            continue
-        if tracker_id is not None and match["tracker_id"] != tracker_id:
-            continue
-        if status is not None and match["status"] != status.value:
-            continue
-        if needle and needle not in f'{post["text"]} {post["author"]}'.lower():
-            continue
-        result.append(to_response(match))
-        if limit is not None and len(result) == limit:
-            break
-    return result
+    query = select(Match).join(Post, Match.post_id == Post.id).order_by(Match.id.desc())
+    if platform is not None:
+        query = query.where(Post.platform == platform.value)
+    if tracker_id is not None:
+        query = query.where(Match.tracker_id == tracker_id)
+    if status is not None:
+        query = query.where(Match.status == status.value)
+    if search and search.strip():
+        needle = search.lower().strip()
+        query = query.where(
+            (Post.text + " " + Post.author).ilike(f"%{_escape_like(needle)}%", escape="\\")
+        )
+    if limit is not None:
+        query = query.limit(limit)
+    return [to_response(db, m) for m in db.scalars(query)]
 
 
-def get_match(match_id: int) -> dict:
-    return to_response(_get(match_id))
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def update_status(match_id: int, new_status: LeadStatus) -> dict:
-    match = _get(match_id)
-    current = match["status"]
+def get_match(db: Session, match_id: int) -> dict:
+    return to_response(db, _get(db, match_id))
+
+
+def update_status(db: Session, match_id: int, new_status: LeadStatus) -> dict:
+    match = _get(db, match_id)
+    current = match.status
 
     # Repeating the same status is harmless: nothing changes.
     if new_status.value == current:
-        return to_response(match)
+        return to_response(db, match)
 
     if new_status.value not in ALLOWED_TRANSITIONS[current]:
         raise ConflictError(
             f"Invalid lead status transition: {current} -> {new_status.value}"
         )
 
-    match["status"] = new_status.value
-    match["updated_at"] = now()
-    return to_response(match)
+    match.status = new_status.value
+    match.updated_at = utcnow()
+    db.commit()
+    return to_response(db, match)

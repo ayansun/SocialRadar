@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.api import demo, matches, notifications, posts, stats, trackers
 from app.errors import AppError
@@ -16,12 +17,12 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 app = FastAPI(
     title="SocialRadar API",
-    version="0.1.0",
+    version="0.2.0",
     description=(
         "Find potential clients in social media posts.\n\n"
         "Create **trackers** with keywords, add **posts**, and the API creates "
         "**matches** (leads) and **notifications** automatically.\n\n"
-        "All data is kept in memory and is reset when the server restarts. "
+        "All data is stored in PostgreSQL and survives server restarts. "
         "Posts are added manually or from a demo set; no real Bluesky or "
         "Threads data is loaded in this version."
     ),
@@ -39,6 +40,20 @@ app = FastAPI(
 def handle_app_error(request: Request, error: AppError) -> JSONResponse:
     """Turn business errors from services into JSON like {"detail": "..."}."""
     return JSONResponse(status_code=error.status_code, content={"detail": error.message})
+
+
+@app.exception_handler(IntegrityError)
+def handle_integrity_error(request: Request, error: IntegrityError) -> JSONResponse:
+    """A database constraint was violated (duplicate, broken reference...)."""
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "The request conflicts with existing data"},
+    )
+
+
+@app.exception_handler(OperationalError)
+def handle_database_unavailable(request: Request, error: OperationalError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Database is unavailable"})
 
 
 app.include_router(trackers.router)

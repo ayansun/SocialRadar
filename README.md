@@ -1,19 +1,47 @@
 # SocialRadar
 
-SocialRadar is a FastAPI project for Web Programming Fundamentals. It helps freelancers find potential clients by matching social media posts against keyword trackers. Add Bluesky and Threads posts manually or load sample posts with `POST /api/demo/seed`. Data lives in memory and resets when the server restarts.
+SocialRadar is a FastAPI project for Web Programming Fundamentals. It helps freelancers find potential clients by matching social media posts against keyword trackers. Add Bluesky and Threads posts manually or load sample posts with `POST /api/demo/seed`. Data is stored in PostgreSQL and survives server restarts.
 
 ## Run locally
 
-From the project directory, with Python 3.11 or newer:
+Requirements: Python 3.11+ and PostgreSQL 14+ (or Docker).
 
-```bash
+```
+# 1. Start PostgreSQL (Docker). Without Docker, create an empty database
+#    named "socialradar" in your own PostgreSQL instead.
+docker compose up -d
+
+# 2. Install dependencies
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
+
+# 3. Configure the database connection
+cp .env.example .env               # edit DATABASE_URL if your login/password differ
+
+# 4. Create the tables from the migrations
+alembic upgrade head
+
+# 5. Start the server
 python -m uvicorn app.main:app
 ```
 
 The same server hosts the [web app](http://127.0.0.1:8000/) and [Swagger UI](http://127.0.0.1:8000/docs).
+
+`DATABASE_URL` format: `postgresql+psycopg2://USER:PASSWORD@HOST:PORT/DATABASE`.
+
+## Database
+
+| Table | Purpose | Key constraints |
+|---|---|---|
+| `trackers` | Keyword searches | name unique (case-insensitive); keywords and platforms not empty |
+| `posts` | Social media posts | `(platform, external_id)` unique; platform and source restricted to known values |
+| `matches` | A tracker found a post (a lead) | FK to trackers and posts (`ON DELETE CASCADE`); `(tracker_id, post_id)` unique; status restricted to `new/saved/contacted/dismissed` |
+| `notifications` | One per new match | FK to matches (`ON DELETE CASCADE`) |
+
+Relationships (one-to-many): `Tracker -> Matches`, `Post -> Matches`, `Match -> Notifications`. Deleting a tracker or a post removes its matches and their notifications.
+
+Schema changes are managed with Alembic (`alembic/versions/`). After changing a model run `alembic revision --autogenerate -m "description"` and then `alembic upgrade head`. To rebuild the schema from scratch: `alembic downgrade base && alembic upgrade head`.
 
 ## Workflows
 
@@ -25,7 +53,7 @@ The same server hosts the [web app](http://127.0.0.1:8000/) and [Swagger UI](htt
 
 - [`app/main.py`](app/main.py) configures FastAPI, registers routers, and handles application errors.
 - [`app/api/`](app/api/) defines routes, [`app/schemas/`](app/schemas/) defines Pydantic models, and [`app/services/`](app/services/) implements business rules.
-- [`app/storage.py`](app/storage.py) stores trackers, posts, leads, and notifications in Python dictionaries linked by IDs.
+- [`app/models/`](app/models) defines the SQLAlchemy tables, [`app/database.py`](app/database.py) creates the engine and the per-request session (`get_db`), and [`app/config.py`](app/config.py) reads `DATABASE_URL` from the environment. [`alembic/`](alembic) holds the migrations.
 - [`static/`](static/) contains the HTML, CSS, and JavaScript interface. [`tests/`](tests/) contains API tests.
 
 ## Test the API
@@ -58,4 +86,6 @@ Open [Swagger UI](http://127.0.0.1:8000/docs) on a fresh server. Expand a route,
 3. Call `GET /api/matches` with the `tracker_id` query parameter and copy the new lead's ID. Use it in `PATCH /api/matches/{match_id}/status`. Sending `{"status":"contacted"}` immediately returns **409**. Sending `{"status":"saved"}` and then `{"status":"contacted"}` returns **200** for each request.
 4. Call `DELETE /api/trackers/{tracker_id}`. Expect **204**. Call `GET /api/matches` and `GET /api/notifications` with empty filters to see empty lists. The post still appears in `GET /api/posts`. Calling `GET /api/trackers/{tracker_id}` for the deleted tracker returns **404**.
 
-With the virtual environment active, run the automated suite with `python -m pytest -q`. Expected result is **60 passed**.
+With the virtual environment active and PostgreSQL running, run the automated suite with `python -m pytest -q`. Tests use a separate database called `socialradar_test` (created automatically), so your real data is not touched. Expected result is **70 passed**.
+
+To check persistence, create a tracker, stop the server, start it again, and call `GET /api/trackers`: the tracker is still there.

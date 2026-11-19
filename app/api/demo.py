@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from app.demo_data import DEMO_POSTS
 from app.errors import ConflictError
+from app.database import get_db
 from app.schemas.common import PostSource
 from app.schemas.match import DemoSeedResponse
 from app.schemas.post import PostCreate
@@ -20,14 +22,14 @@ router = APIRouter(tags=["Other"])
         "already imported are skipped, so calling it twice is safe."
     ),
 )
-def seed_demo_posts():
+def seed_demo_posts(db: Session = Depends(get_db)):
     imported = 0
     skipped = 0
     matches_created = 0
 
     for item in DEMO_POSTS:
         try:
-            result = post_service.create_post(PostCreate(**item), source=PostSource.DEMO)
+            result = post_service.create_post(db, PostCreate(**item), source=PostSource.DEMO)
         except ConflictError:
             skipped += 1
             continue

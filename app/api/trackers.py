@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.api.responses import CONFLICT, NOT_FOUND
 from app.schemas.common import Platform
 from app.schemas.tracker import TrackerCreate, TrackerResponse, TrackerUpdate
@@ -13,8 +15,9 @@ def list_trackers(
     is_active: bool | None = Query(default=None, description="Only active or only paused"),
     platform: Platform | None = Query(default=None, description="Trackers watching this platform"),
     search: str | None = Query(default=None, description="Part of the tracker name"),
+    db: Session = Depends(get_db),
 ):
-    return tracker_service.list_trackers(is_active, platform, search)
+    return tracker_service.list_trackers(db, is_active, platform, search)
 
 
 @router.post(
@@ -25,8 +28,8 @@ def list_trackers(
     description="Creates a tracker and checks already stored posts against it.",
     responses=CONFLICT,
 )
-def create_tracker(data: TrackerCreate):
-    return tracker_service.create_tracker(data)
+def create_tracker(data: TrackerCreate, db: Session = Depends(get_db)):
+    return tracker_service.create_tracker(db, data)
 
 
 @router.get(
@@ -35,8 +38,8 @@ def create_tracker(data: TrackerCreate):
     summary="Get one tracker",
     responses=NOT_FOUND,
 )
-def get_tracker(tracker_id: int):
-    return tracker_service.get_tracker(tracker_id)
+def get_tracker(tracker_id: int, db: Session = Depends(get_db)):
+    return tracker_service.get_tracker(db, tracker_id)
 
 
 @router.patch(
@@ -50,8 +53,8 @@ def get_tracker(tracker_id: int):
     ),
     responses={**NOT_FOUND, **CONFLICT},
 )
-def update_tracker(tracker_id: int, data: TrackerUpdate):
-    return tracker_service.update_tracker(tracker_id, data)
+def update_tracker(tracker_id: int, data: TrackerUpdate, db: Session = Depends(get_db)):
+    return tracker_service.update_tracker(db, tracker_id, data)
 
 
 @router.delete(
@@ -61,5 +64,5 @@ def update_tracker(tracker_id: int, data: TrackerUpdate):
     description="Also deletes the tracker's matches and their notifications.",
     responses=NOT_FOUND,
 )
-def delete_tracker(tracker_id: int):
-    tracker_service.delete_tracker(tracker_id)
+def delete_tracker(tracker_id: int, db: Session = Depends(get_db)):
+    tracker_service.delete_tracker(db, tracker_id)

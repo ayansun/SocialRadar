@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.api.responses import CONFLICT, NOT_FOUND
 from app.schemas.common import Platform, PostSource
 from app.schemas.match import PostIngestResponse
@@ -15,8 +17,9 @@ def list_posts(
     source: PostSource | None = Query(default=None, description="demo or manual"),
     search: str | None = Query(default=None, description="Part of the text or author"),
     has_matches: bool | None = Query(default=None, description="Only posts with / without matches"),
+    db: Session = Depends(get_db),
 ):
-    return post_service.list_posts(platform, source, search, has_matches)
+    return post_service.list_posts(db, platform, source, search, has_matches)
 
 
 @router.post(
@@ -30,15 +33,15 @@ def list_posts(
     ),
     responses=CONFLICT,
 )
-def create_post(data: PostCreate):
-    return post_service.create_post(data)
+def create_post(data: PostCreate, db: Session = Depends(get_db)):
+    return post_service.create_post(db, data)
 
 
 @router.get(
     "/{post_id}", response_model=PostResponse, summary="Get one post", responses=NOT_FOUND
 )
-def get_post(post_id: int):
-    return post_service.get_post(post_id)
+def get_post(post_id: int, db: Session = Depends(get_db)):
+    return post_service.get_post(db, post_id)
 
 
 @router.delete(
@@ -48,5 +51,5 @@ def get_post(post_id: int):
     description="Also deletes the post's matches and their notifications.",
     responses=NOT_FOUND,
 )
-def delete_post(post_id: int):
-    post_service.delete_post(post_id)
+def delete_post(post_id: int, db: Session = Depends(get_db)):
+    post_service.delete_post(db, post_id)

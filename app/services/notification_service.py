@@ -1,73 +1,73 @@
 """Notifications: one is created automatically for every new match."""
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
 from app.errors import NotFoundError
+from app.models import Match, Notification
 from app.services.common import post_view
-from app.storage import now, storage
 
 
-def to_response(notification: dict) -> dict:
-    """Add the message text and the related post to a notification record.
+def to_response(db: Session, notification: Notification) -> dict:
+    """Add the message text and the related post to a notification.
 
     The message is built here (not stored) so it always shows the current
     tracker name, even after the tracker is renamed.
     """
-    tracker = storage.trackers[notification["tracker_id"]]
-    post = storage.posts[notification["post_id"]]
+    match = notification.match
     message = (
-        f'New lead for "{tracker["name"]}": '
-        f'{post["author"]} on {post["platform"].capitalize()}'
+        f'New lead for "{match.tracker.name}": '
+        f"{match.post.author} on {match.post.platform.capitalize()}"
     )
-    return {**notification, "message": message, "post": post_view(post)}
-
-
-def create_for_match(match: dict) -> dict:
-    """Create an unread notification for a new match."""
-    notification = {
-        "id": storage.next_id("notification"),
-        "match_id": match["id"],
-        "tracker_id": match["tracker_id"],
-        "post_id": match["post_id"],
-        "is_read": False,
-        "created_at": now(),
+    return {
+        "id": notification.id,
+        "match_id": match.id,
+        "tracker_id": match.tracker_id,
+        "post_id": match.post_id,
+        "message": message,
+        "post": post_view(db, match.post),
+        "is_read": notification.is_read,
+        "created_at": notification.created_at,
     }
-    storage.notifications[notification["id"]] = notification
+
+
+def create_for_match(db: Session, match: Match) -> Notification:
+    """Create an unread notification for a new match."""
+    notification = Notification(match_id=match.id, is_read=False)
+    db.add(notification)
+    db.flush()
     return notification
 
 
-def delete_for_match(match_id: int) -> None:
-    """Remove notifications that point to a match which is being deleted."""
-    for notification in list(storage.notifications.values()):
-        if notification["match_id"] == match_id:
-            del storage.notifications[notification["id"]]
-
-
-def _get(notification_id: int) -> dict:
-    notification = storage.notifications.get(notification_id)
+def _get(db: Session, notification_id: int) -> Notification:
+    notification = db.get(Notification, notification_id)
     if notification is None:
         raise NotFoundError("Notification not found")
     return notification
 
 
-def list_notifications(is_read: bool | None = None) -> list[dict]:
+def list_notifications(db: Session, is_read: bool | None = None) -> list[dict]:
     """Newest first, optionally filtered by read state."""
-    notifications = sorted(
-        storage.notifications.values(), key=lambda n: n["id"], reverse=True
-    )
+    query = select(Notification).order_by(Notification.id.desc())
     if is_read is not None:
-        notifications = [n for n in notifications if n["is_read"] == is_read]
-    return [to_response(n) for n in notifications]
+        query = query.where(Notification.is_read == is_read)
+    return [to_response(db, n) for n in db.scalars(query)]
 
 
-def count_unread() -> int:
-    return sum(1 for n in storage.notifications.values() if not n["is_read"])
+def count_unread(db: Session) -> int:
+    return db.scalar(
+        select(func.count(Notification.id)).where(Notification.is_read.is_(False))
+    ) or 0
 
 
-def set_read(notification_id: int, is_read: bool) -> dict:
-    notification = _get(notification_id)
-    notification["is_read"] = is_read
-    return to_response(notification)
+def set_read(db: Session, notification_id: int, is_read: bool) -> dict:
+    notification = _get(db, notification_id)
+    notification.is_read = is_read
+    db.commit()
+    return to_response(db, notification)
 
 
-def delete_notification(notification_id: int) -> None:
-    _get(notification_id)
-    del storage.notifications[notification_id]
+def delete_notification(db: Session, notification_id: int) -> None:
+    notification = _get(db, notification_id)
+    db.delete(notification)
+    db.commit()

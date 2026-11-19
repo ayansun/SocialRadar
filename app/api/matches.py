@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.api.responses import CONFLICT, NOT_FOUND
 from app.schemas.common import LeadStatus, Platform
 from app.schemas.match import MatchResponse, MatchStatusUpdate
@@ -19,15 +21,16 @@ def list_matches(
     tracker_id: int | None = Query(default=None, description="404 if the tracker does not exist"),
     status: LeadStatus | None = Query(default=None),
     search: str | None = Query(default=None, description="Part of the post text or author"),
+    db: Session = Depends(get_db),
 ):
-    return lead_service.list_matches(platform, tracker_id, status, search)
+    return lead_service.list_matches(db, platform, tracker_id, status, search)
 
 
 @router.get(
     "/{match_id}", response_model=MatchResponse, summary="Get one match", responses=NOT_FOUND
 )
-def get_match(match_id: int):
-    return lead_service.get_match(match_id)
+def get_match(match_id: int, db: Session = Depends(get_db)):
+    return lead_service.get_match(db, match_id)
 
 
 @router.patch(
@@ -41,5 +44,5 @@ def get_match(match_id: int):
     ),
     responses={**NOT_FOUND, **CONFLICT},
 )
-def update_match_status(match_id: int, data: MatchStatusUpdate):
-    return lead_service.update_status(match_id, data.status)
+def update_match_status(match_id: int, data: MatchStatusUpdate, db: Session = Depends(get_db)):
+    return lead_service.update_status(db, match_id, data.status)

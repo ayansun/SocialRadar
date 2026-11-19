@@ -1,28 +1,74 @@
 """Shared test setup.
 
-Every test starts with empty in-memory storage, so tests do not depend on
-each other and can run in any order.
+Tests run against a separate PostgreSQL database named like the main one
+plus "_test" (for example `socialradar_test`). It is created automatically,
+and every test starts with empty tables, so tests do not depend on each
+other and the real data is never touched.
 """
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.orm import sessionmaker
 
+import app.models  # noqa: F401  (registers the tables)
+from app.config import DATABASE_URL
+from app.database import Base, get_db
 from app.main import app
-from app.storage import storage
+
+_main_url = make_url(DATABASE_URL)
+TEST_DB_NAME = f"{_main_url.database}_test"
+TEST_URL = _main_url.set(database=TEST_DB_NAME)
+
+
+def _ensure_test_database() -> None:
+    admin = create_engine(_main_url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        exists = conn.scalar(
+            text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": TEST_DB_NAME}
+        )
+        if not exists:
+            conn.execute(text(f'CREATE DATABASE "{TEST_DB_NAME}"'))
+    admin.dispose()
+
+
+@pytest.fixture(scope="session")
+def test_engine():
+    _ensure_test_database()
+    engine = create_engine(TEST_URL)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture(autouse=True)
-def clean_storage():
-    storage.reset()
+def clean_database(test_engine):
+    """Empty every table (and restart the ids) before each test."""
+    tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
+    with test_engine.begin() as conn:
+        conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
     yield
-    storage.reset()
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client(test_engine) -> TestClient:
+    TestSession = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
+
+    def override_get_db():
+        db = TestSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 
+# --- helpers used by several test files ------------------------------------
 
 
 def tracker_payload(**overrides) -> dict:
