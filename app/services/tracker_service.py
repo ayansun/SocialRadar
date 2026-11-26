@@ -5,12 +5,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.errors import BusinessRuleError, ConflictError, NotFoundError
-from app.models import Tracker
+from app.models import Tracker, User
 from app.models.mixins import utcnow
 from app.schemas.common import Platform
 from app.schemas.tracker import TrackerCreate, TrackerUpdate
 from app.services import matching_service
-from app.services.common import count_matches
+from app.services.common import count_matches, ensure_access
 
 
 def to_response(db: Session, tracker: Tracker) -> dict:
@@ -27,10 +27,12 @@ def to_response(db: Session, tracker: Tracker) -> dict:
     }
 
 
-def _get(db: Session, tracker_id: int) -> Tracker:
+def _get(db: Session, user: User, tracker_id: int) -> Tracker:
+    """404 if missing, 403 if it belongs to someone else (admins may access all)."""
     tracker = db.get(Tracker, tracker_id)
     if tracker is None:
         raise NotFoundError("Tracker not found")
+    ensure_access(user, tracker.owner_id)
     return tracker
 
 
@@ -45,11 +47,14 @@ def _check_name_is_free(db: Session, name: str, ignore_id: int | None = None) ->
 
 def list_trackers(
     db: Session,
+    user: User,
     is_active: bool | None = None,
     platform: Platform | None = None,
     search: str | None = None,
 ) -> list[dict]:
     query = select(Tracker).order_by(Tracker.id)
+    if user.role != "admin":
+        query = query.where(Tracker.owner_id == user.id)  # only own trackers
     if is_active is not None:
         query = query.where(Tracker.is_active == is_active)
     if platform is not None:
@@ -62,15 +67,15 @@ def list_trackers(
     return [to_response(db, t) for t in db.scalars(query)]
 
 
-def get_tracker(db: Session, tracker_id: int) -> dict:
-    return to_response(db, _get(db, tracker_id))
+def get_tracker(db: Session, user: User, tracker_id: int) -> dict:
+    return to_response(db, _get(db, user, tracker_id))
 
 
-def create_tracker(db: Session, data: TrackerCreate) -> dict:
+def create_tracker(db: Session, user: User, data: TrackerCreate) -> dict:
     _check_name_is_free(db, data.name)
 
     # mode="json" turns enums into plain strings like "bluesky"
-    tracker = Tracker(**data.model_dump(mode="json"))
+    tracker = Tracker(**data.model_dump(mode="json"), owner_id=user.id)
     db.add(tracker)
     try:
         db.flush()
@@ -84,8 +89,8 @@ def create_tracker(db: Session, data: TrackerCreate) -> dict:
     return to_response(db, tracker)
 
 
-def update_tracker(db: Session, tracker_id: int, data: TrackerUpdate) -> dict:
-    tracker = _get(db, tracker_id)
+def update_tracker(db: Session, user: User, tracker_id: int, data: TrackerUpdate) -> dict:
+    tracker = _get(db, user, tracker_id)
     # Only the fields that the client actually sent.
     changes = data.model_dump(mode="json", exclude_unset=True)
 
@@ -118,8 +123,8 @@ def update_tracker(db: Session, tracker_id: int, data: TrackerUpdate) -> dict:
     return to_response(db, tracker)
 
 
-def delete_tracker(db: Session, tracker_id: int) -> None:
-    tracker = _get(db, tracker_id)
+def delete_tracker(db: Session, user: User, tracker_id: int) -> None:
+    tracker = _get(db, user, tracker_id)
     # The database removes the tracker's matches and their notifications
     # (ON DELETE CASCADE), so nothing is left pointing to a missing tracker.
     db.delete(tracker)

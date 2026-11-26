@@ -3,7 +3,14 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Match, Post
+from app.errors import ForbiddenError
+from app.models import Match, Post, User
+
+
+def ensure_access(user: User, owner_id: int | None) -> None:
+    """Admins may use everything; a regular user only what they own."""
+    if user.role != "admin" and owner_id != user.id:
+        raise ForbiddenError("You do not have access to this resource")
 
 
 def count_matches(db: Session, tracker_id: int | None = None, post_id: int | None = None) -> int:

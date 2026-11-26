@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from app.api import demo, matches, notifications, posts, stats, trackers
+from app.api import auth, demo, matches, notifications, posts, stats, trackers
 from app.errors import AppError
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -24,9 +24,13 @@ app = FastAPI(
         "**matches** (leads) and **notifications** automatically.\n\n"
         "All data is stored in PostgreSQL and survives server restarts. "
         "Posts are added manually or from a demo set; no real Bluesky or "
-        "Threads data is loaded in this version."
+        "Threads data is loaded in this version.\n\n"
+        "**Authentication:** register with `POST /auth/register`, log in with "
+        "`POST /auth/login` and use the token (Authorize button). Trackers, "
+        "leads and notifications are private to their owner; admins see all."
     ),
     openapi_tags=[
+        {"name": "Auth", "description": "Register, log in (JWT), current user"},
         {"name": "Trackers", "description": "Keyword trackers (Workflow 1)"},
         {"name": "Posts", "description": "Post ingestion and matching (Workflow 2)"},
         {"name": "Matches / Leads", "description": "Found leads and their status (Workflow 3)"},
@@ -56,6 +60,7 @@ def handle_database_unavailable(request: Request, error: OperationalError) -> JS
     return JSONResponse(status_code=503, content={"detail": "Database is unavailable"})
 
 
+app.include_router(auth.router)
 app.include_router(trackers.router)
 app.include_router(posts.router)
 app.include_router(matches.router)

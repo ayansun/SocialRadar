@@ -50,11 +50,11 @@ def test_deleting_tracker_cascades_to_matches_and_notifications(client, db):
     assert _count(db, Post) == 1  # the post itself stays
 
 
-def test_deleting_post_cascades_to_matches_and_notifications(client, db):
-    create_tracker(client)
-    created = create_post(client)
+def test_deleting_post_cascades_to_matches_and_notifications(admin_client, db):
+    create_tracker(admin_client)
+    created = create_post(admin_client)
 
-    assert client.delete(f"/api/posts/{created['post']['id']}").status_code == 204
+    assert admin_client.delete(f"/api/posts/{created['post']['id']}").status_code == 204
     db.expire_all()
     assert _count(db, Match) == 0
     assert _count(db, Notification) == 0
