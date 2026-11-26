@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: socialradar-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: socialradar
+    ports:
+      - "5432:5432"
+    volumes:
+      - socialradar-data:/var/lib/postgresql/data
+
+volumes:
+  socialradar-data:

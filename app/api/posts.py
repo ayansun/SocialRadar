@@ -2,13 +2,19 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import get_current_user, require_admin
+from app.models import User
 from app.api.responses import CONFLICT, NOT_FOUND
 from app.schemas.common import Platform, PostSource
 from app.schemas.match import PostIngestResponse
 from app.schemas.post import PostCreate, PostResponse
 from app.services import post_service
 
-router = APIRouter(prefix="/api/posts", tags=["Posts"])
+# Posts are shared by all users: any logged-in user can read and add them,
+# only an admin can delete them (a deletion also removes other users' leads).
+router = APIRouter(
+    prefix="/api/posts", tags=["Posts"], dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[PostResponse], summary="List posts")
@@ -33,8 +39,10 @@ def list_posts(
     ),
     responses=CONFLICT,
 )
-def create_post(data: PostCreate, db: Session = Depends(get_db)):
-    return post_service.create_post(db, data)
+def create_post(
+    data: PostCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    return post_service.create_post(db, data, user=user)
 
 
 @router.get(
@@ -48,8 +56,9 @@ def get_post(post_id: int, db: Session = Depends(get_db)):
     "/{post_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a post",
-    description="Also deletes the post's matches and their notifications.",
+    description="Admin only. Also deletes the post's matches and their notifications.",
     responses=NOT_FOUND,
+    dependencies=[Depends(require_admin)],
 )
 def delete_post(post_id: int, db: Session = Depends(get_db)):
     post_service.delete_post(db, post_id)

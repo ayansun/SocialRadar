@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.errors import ConflictError, NotFoundError
-from app.models import Match, Post
+from app.models import Match, Post, User
 from app.schemas.common import Platform, PostSource
 from app.schemas.post import PostCreate
 from app.services import lead_service, matching_service
@@ -51,7 +51,12 @@ def get_post(db: Session, post_id: int) -> dict:
     return post_view(db, _get(db, post_id))
 
 
-def create_post(db: Session, data: PostCreate, source: PostSource = PostSource.MANUAL) -> dict:
+def create_post(
+    db: Session,
+    data: PostCreate,
+    source: PostSource = PostSource.MANUAL,
+    user: User | None = None,
+) -> dict:
     """Save a post, run keyword matching and return what happened."""
     # The same post must not be stored twice.
     existing = db.scalar(
@@ -80,6 +85,11 @@ def create_post(db: Session, data: PostCreate, source: PostSource = PostSource.M
     # Each new match also creates exactly one notification.
     new_matches = matching_service.match_post(db, post)
     db.commit()
+
+    # Matches are created for every user's trackers, but the response only
+    # shows the caller's own leads (admins and the demo import see all).
+    if user is not None and user.role != "admin":
+        new_matches = [m for m in new_matches if m.tracker.owner_id == user.id]
 
     return {
         "post": post_view(db, post),

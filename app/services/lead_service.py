@@ -8,10 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import ConflictError, NotFoundError
-from app.models import Match, Post, Tracker
+from app.models import Match, Post, Tracker, User
 from app.models.mixins import utcnow
 from app.schemas.common import LeadStatus, Platform
-from app.services.common import post_view
+from app.services.common import ensure_access, post_view
 
 # Which statuses a lead can move to from each status.
 # Note: dismissed -> contacted is not allowed. A dismissed lead must be
@@ -40,15 +40,18 @@ def to_response(db: Session, match: Match) -> dict:
     }
 
 
-def _get(db: Session, match_id: int) -> Match:
+def _get(db: Session, user: User, match_id: int) -> Match:
+    """A lead belongs to the owner of its tracker."""
     match = db.get(Match, match_id)
     if match is None:
         raise NotFoundError("Match not found")
+    ensure_access(user, match.tracker.owner_id)
     return match
 
 
 def list_matches(
     db: Session,
+    user: User,
     platform: Platform | None = None,
     tracker_id: int | None = None,
     status: LeadStatus | None = None,
@@ -56,10 +59,17 @@ def list_matches(
     limit: int | None = None,
 ) -> list[dict]:
     """Newest first, with optional filters."""
-    if tracker_id is not None and db.get(Tracker, tracker_id) is None:
-        raise NotFoundError("Tracker not found")
+    if tracker_id is not None:
+        tracker = db.get(Tracker, tracker_id)
+        if tracker is None:
+            raise NotFoundError("Tracker not found")
+        ensure_access(user, tracker.owner_id)
 
     query = select(Match).join(Post, Match.post_id == Post.id).order_by(Match.id.desc())
+    if user.role != "admin":  # only leads of the user's own trackers
+        query = query.join(Tracker, Match.tracker_id == Tracker.id).where(
+            Tracker.owner_id == user.id
+        )
     if platform is not None:
         query = query.where(Post.platform == platform.value)
     if tracker_id is not None:
@@ -80,12 +90,12 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def get_match(db: Session, match_id: int) -> dict:
-    return to_response(db, _get(db, match_id))
+def get_match(db: Session, user: User, match_id: int) -> dict:
+    return to_response(db, _get(db, user, match_id))
 
 
-def update_status(db: Session, match_id: int, new_status: LeadStatus) -> dict:
-    match = _get(db, match_id)
+def update_status(db: Session, user: User, match_id: int, new_status: LeadStatus) -> dict:
+    match = _get(db, user, match_id)
     current = match.status
 
     # Repeating the same status is harmless: nothing changes.

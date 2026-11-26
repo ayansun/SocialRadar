@@ -33,9 +33,9 @@ class Match(Base):
         DateTime(timezone=True), default=utcnow, server_default=func.now(), nullable=False
     )
 
-    tracker: Mapped["Tracker"] = relationship(back_populates="matches")  
-    post: Mapped["Post"] = relationship(back_populates="matches") 
+    tracker: Mapped["Tracker"] = relationship(back_populates="matches")  # noqa: F821
+    post: Mapped["Post"] = relationship(back_populates="matches")  # noqa: F821
     # One match -> many notifications (the app creates exactly one).
-    notifications: Mapped[list["Notification"]] = relationship( 
+    notifications: Mapped[list["Notification"]] = relationship(  # noqa: F821
         back_populates="match", cascade="all, delete-orphan", passive_deletes=True
     )

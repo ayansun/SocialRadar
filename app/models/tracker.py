@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Index, String, func, true
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, func, true
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,11 @@ class Tracker(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    # The user who owns this tracker. NULL only for trackers created before
+    # authentication existed; only an admin can see those.
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     excluded_keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     platforms: Mapped[list[str]] = mapped_column(JSONB, nullable=False)

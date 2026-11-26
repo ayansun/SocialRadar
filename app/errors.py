@@ -29,3 +29,9 @@ class BusinessRuleError(AppError):
     """The data is well-formed but breaks a business rule -> 422."""
 
     status_code = 422
+
+
+class ForbiddenError(AppError):
+    """The user is logged in but is not allowed to do this -> 403."""
+
+    status_code = 403
