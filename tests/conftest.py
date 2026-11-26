@@ -6,6 +6,11 @@ and every test starts with empty tables, so tests do not depend on each
 other and the real data is never touched.
 """
 
+import os
+
+# Must be set before the app is imported: fast password hashing in tests.
+os.environ.setdefault("BCRYPT_ROUNDS", "4")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
@@ -53,7 +58,8 @@ def clean_database(test_engine):
 
 
 @pytest.fixture
-def client(test_engine) -> TestClient:
+def test_session(test_engine):
+    """Use the test database inside the app and give tests a session factory."""
     TestSession = sessionmaker(bind=test_engine, autoflush=False, expire_on_commit=False)
 
     def override_get_db():
@@ -64,8 +70,50 @@ def client(test_engine) -> TestClient:
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    yield TestSession
     app.dependency_overrides.clear()
+
+
+PASSWORD = "password123"
+
+
+@pytest.fixture
+def anon_client(test_session) -> TestClient:
+    """A client that is not logged in."""
+    return TestClient(app)
+
+
+@pytest.fixture
+def make_client(test_session):
+    """Factory: make_client("alice") registers alice, logs her in and returns a
+    client that sends her token with every request."""
+
+    def factory(name: str) -> TestClient:
+        c = TestClient(app)
+        data = {"email": f"{name}@example.com", "username": name, "password": PASSWORD}
+        assert c.post("/auth/register", json=data).status_code == 201
+        login = c.post("/auth/login", data={"username": name, "password": PASSWORD})
+        assert login.status_code == 200, login.text
+        c.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+        return c
+
+    return factory
+
+
+@pytest.fixture
+def client(make_client) -> TestClient:
+    """A logged-in regular user (most tests use this one)."""
+    return make_client("user1")
+
+
+@pytest.fixture
+def admin_client(make_client, test_session) -> TestClient:
+    """A logged-in admin."""
+    c = make_client("admin")
+    with test_session() as db:
+        db.execute(text("UPDATE users SET role = 'admin' WHERE username = 'admin'"))
+        db.commit()
+    return c
 
 
 # --- helpers used by several test files ------------------------------------

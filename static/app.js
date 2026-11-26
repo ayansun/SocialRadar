@@ -13,9 +13,17 @@ const STATUS_NAMES = { new: "New", saved: "Saved", contacted: "Contacted", dismi
 // Button text for moving a lead to a status.
 const STATUS_ACTIONS = { new: "Restore", saved: "Save", contacted: "Mark contacted", dismissed: "Dismiss" };
 
+// ---------------------------------------------------------------------------
+// Login: the JWT token is kept in localStorage and sent with every request.
+// ---------------------------------------------------------------------------
+
+const TOKEN_KEY = "socialradar_token";
+const getToken = () => localStorage.getItem(TOKEN_KEY);
+
 /** Call the API and return parsed JSON. Throws an Error with a readable message. */
 async function api(path, options = {}) {
   const config = { method: options.method || "GET", headers: {} };
+  if (getToken()) config.headers["Authorization"] = `Bearer ${getToken()}`;
   if (options.body !== undefined) {
     config.headers["Content-Type"] = "application/json";
     config.body = JSON.stringify(options.body);
@@ -28,6 +36,11 @@ async function api(path, options = {}) {
     throw new Error("Cannot reach the server. Is it running?");
   }
 
+  if (response.status === 401) { // token missing, wrong or expired: log in again
+    localStorage.removeItem(TOKEN_KEY);
+    showAuthScreen();
+    throw new Error("Please log in");
+  }
   if (response.status === 204) return null; // No Content
 
   const data = await response.json().catch(() => null);
@@ -774,5 +787,85 @@ function showView() {
   refresh();
 }
 
-window.addEventListener("hashchange", showView);
-showView();
+// ---------------------------------------------------------------------------
+// Login / register form
+// ---------------------------------------------------------------------------
+
+let registerMode = false;
+
+function setAuthMode(register) {
+  registerMode = register;
+  $("#auth-title").textContent = register ? "Register" : "Log in";
+  $("#auth-submit").textContent = register ? "Create account" : "Log in";
+  $("#auth-switch").textContent = register ? "Have an account? Log in" : "No account? Register";
+  $("#auth-login-label").textContent = register ? "Username" : "Email or username";
+  $("#auth-email-row").hidden = !register;
+  $("#auth-error").hidden = true;
+}
+
+function showAuthScreen() {
+  $("#auth-screen").hidden = false;
+  $("#auth-password").value = "";
+}
+
+function showAuthError(message) {
+  $("#auth-error").textContent = message;
+  $("#auth-error").hidden = false;
+}
+
+/** POST to /auth/login (form data, as OAuth2 requires) and keep the token. */
+async function logIn(login, password) {
+  const response = await fetch("/auth/login", {
+    method: "POST",
+    body: new URLSearchParams({ username: login, password: password }),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readError(data, response.status));
+  localStorage.setItem(TOKEN_KEY, data.access_token);
+}
+
+$("#auth-switch").addEventListener("click", () => setAuthMode(!registerMode));
+
+$("#auth-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const login = $("#auth-login").value.trim();
+  const password = $("#auth-password").value;
+  try {
+    if (registerMode) {
+      const response = await fetch("/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: $("#auth-email").value.trim(), username: login, password }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(readError(data, response.status));
+    }
+    await logIn(login, password);
+    await start();
+  } catch (error) {
+    showAuthError(error.message);
+  }
+});
+
+$("#logout").addEventListener("click", () => {
+  localStorage.removeItem(TOKEN_KEY);
+  $("#user-name").textContent = "";
+  setAuthMode(false);
+  showAuthScreen();
+});
+
+/** Start the app: check the saved token, then show the page or the login form. */
+async function start() {
+  if (!getToken()) return showAuthScreen();
+  try {
+    const user = await api("/auth/me");
+    $("#user-name").textContent = user.role === "admin" ? `${user.username} (admin)` : user.username;
+  } catch (error) {
+    return; // api() already showed the login form
+  }
+  $("#auth-screen").hidden = true;
+  showView();
+}
+
+window.addEventListener("hashchange", () => { if (getToken()) showView(); });
+start();

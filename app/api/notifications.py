@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies import get_current_user
+from app.models import User
 from app.api.responses import NOT_FOUND
 from app.schemas.notification import NotificationResponse, NotificationUpdate
 from app.services import notification_service
@@ -13,8 +15,9 @@ router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 def list_notifications(
     is_read: bool | None = Query(default=None, description="false = only unread"),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    return notification_service.list_notifications(db, is_read)
+    return notification_service.list_notifications(db, user, is_read)
 
 
 @router.patch(
@@ -24,9 +27,12 @@ def list_notifications(
     responses=NOT_FOUND,
 )
 def update_notification(
-    notification_id: int, data: NotificationUpdate, db: Session = Depends(get_db)
+    notification_id: int,
+    data: NotificationUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    return notification_service.set_read(db, notification_id, data.is_read)
+    return notification_service.set_read(db, user, notification_id, data.is_read)
 
 
 @router.delete(
@@ -35,5 +41,7 @@ def update_notification(
     summary="Delete a notification",
     responses=NOT_FOUND,
 )
-def delete_notification(notification_id: int, db: Session = Depends(get_db)):
-    notification_service.delete_notification(db, notification_id)
+def delete_notification(
+    notification_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    notification_service.delete_notification(db, user, notification_id)

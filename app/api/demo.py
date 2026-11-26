@@ -4,18 +4,19 @@ from sqlalchemy.orm import Session
 from app.demo_data import DEMO_POSTS
 from app.errors import ConflictError
 from app.database import get_db
+from app.dependencies import require_admin
 from app.schemas.common import PostSource
 from app.schemas.match import DemoSeedResponse
 from app.schemas.post import PostCreate
 from app.services import post_service
 
-router = APIRouter(tags=["Other"])
+router = APIRouter(tags=["Other"], dependencies=[Depends(require_admin)])
 
 
 @router.post(
     "/api/demo/seed",
     response_model=DemoSeedResponse,
-    summary="Import demo posts",
+    summary="Import demo posts (admin only)",
     description=(
         "Loads a prepared set of test posts (not real Bluesky / Threads "
         "posts) through the normal ingestion workflow. Posts that were "

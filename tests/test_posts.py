@@ -57,25 +57,25 @@ def test_get_missing_post(client):
     assert response.json() == {"detail": "Post not found"}
 
 
-def test_delete_post_removes_its_matches_and_notifications(client):
-    create_tracker(client)
-    first = create_post(client)["post"]
-    create_post(client, external_id="post-002", text="Ищу разработчика для проекта")
-    assert len(client.get("/api/matches").json()) == 2
+def test_delete_post_removes_its_matches_and_notifications(admin_client):
+    create_tracker(admin_client)
+    first = create_post(admin_client)["post"]
+    create_post(admin_client, external_id="post-002", text="Ищу разработчика для проекта")
+    assert len(admin_client.get("/api/matches").json()) == 2
 
-    response = client.delete(f"/api/posts/{first['id']}")
+    response = admin_client.delete(f"/api/posts/{first['id']}")
 
     assert response.status_code == 204
-    matches = client.get("/api/matches").json()
-    notifications = client.get("/api/notifications").json()
+    matches = admin_client.get("/api/matches").json()
+    notifications = admin_client.get("/api/notifications").json()
     assert len(matches) == 1 and matches[0]["post_id"] != first["id"]
     assert len(notifications) == 1 and notifications[0]["post_id"] != first["id"]
     # The tracker stays, with an updated match counter.
-    assert client.get("/api/trackers/1").json()["match_count"] == 1
+    assert admin_client.get("/api/trackers/1").json()["match_count"] == 1
 
 
-def test_delete_missing_post(client):
-    assert client.delete("/api/posts/999").status_code == 404
+def test_delete_missing_post(admin_client):
+    assert admin_client.delete("/api/posts/999").status_code == 404
 
 
 def test_filter_posts(client):
@@ -94,11 +94,11 @@ def test_filter_posts(client):
     assert [p["author"] for p in matched] == ["anna.bsky.social"]
 
 
-def test_demo_seed(client):
-    create_tracker(client)
+def test_demo_seed(admin_client):
+    create_tracker(admin_client)
 
-    first = client.post("/api/demo/seed")
-    second = client.post("/api/demo/seed")
+    first = admin_client.post("/api/demo/seed")
+    second = admin_client.post("/api/demo/seed")
 
     assert first.status_code == 200
     assert first.json()["imported"] == 10
@@ -106,8 +106,8 @@ def test_demo_seed(client):
     # Running it again adds nothing.
     assert second.json()["imported"] == 0
     assert second.json()["skipped"] == 10
-    posts = client.get("/api/posts").json()
+    posts = admin_client.get("/api/posts").json()
     assert len(posts) == 10
     # Demo posts are clearly marked as test data.
     assert all(p["source"] == "demo" for p in posts)
-    assert client.get("/api/posts", params={"source": "manual"}).json() == []
+    assert admin_client.get("/api/posts", params={"source": "manual"}).json() == []
